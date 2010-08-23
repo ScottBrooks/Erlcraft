@@ -5,51 +5,44 @@
 
 -module(erlcraft_server).
 -author('author <author@example.com>').
+-behaviour(gen_server).
 
--export([start/1, stop/0, loop/2]).
+%% Gen_server api
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 %% External API
+-export([start/1]).
 
-start(Options) ->
-    {DocRoot, Options1} = get_option(docroot, Options),
-    Loop = fun (Req) ->
-                   ?MODULE:loop(Req, DocRoot)
-           end,
-    mochiweb_http:start([{name, ?MODULE}, {loop, Loop} | Options1]).
+-record(state, {socket, acceptor}).
 
-stop() ->
-    mochiweb_http:stop(?MODULE).
+start(Args) ->
+    gen_server:start_link(?MODULE, Args, []).
 
-loop(Req, _DocRoot) ->
-    "/" ++ Path = Req:get(path),
-    Req:dump(),
-    case Req:get(method) of
-        Method when Method =:= 'GET'; Method =:= 'HEAD' ->
-            case Path of
-                "announce" ->
-                    tracker:announce(Req);
-                "scrape" ->
-                    tracker:scrape(Req);
-%                "purge" ->
-%                    io:format("Purging all torrents~n", []),
-%                    tracker:purge(),
-%                    Req:respond({200, [], ["ok"]});
-                _       ->
-                    Req:not_found()
-            end;
-        'POST' ->
-            case Path of
-                _ ->
-                    Req:not_found()
-            end;
-        _ ->
-            Req:respond({501, [], []})
-    end.
+init(_Args) ->
+    {ok, LSock} = gen_tcp:listen(1337, [binary, {packet, 0}, {active, once}]),
 
-%% Internal API
+    State = #state{socket=LSock},
+    io:format("Started! ~p~n", [State]),
+    {ok, State}.
 
-get_option(Option, Options) ->
-    {proplists:get_value(Option, Options), proplists:delete(Option, Options)}.
+handle_call(_Request, _From, _State) ->
+    io:format("Call: ~p~n", [_Request]),
+    {reply, none, _State}.
+
+handle_cast(_Request, _State) ->
+    io:format("Cast: ~p~n", [_Request]),
+    {noreply, _State}.
+
+handle_info(_Info, _State) ->
+    io:format("Info: ~p~n", [_Info]),
+    {noreply, _State}.
+
+terminate(_Reason, _State) ->
+    io:format("Term: ~p~n", [_Reason]),
+    normal.
+
+code_change(_OldVsn, _State, _Extra) ->
+    {ok, _State}.
 
 
 %%
