@@ -20,7 +20,9 @@
 
 -record(state, {
                 socket,    % client socket
-                addr       % client address
+                addr,      % client address
+                client_state,
+                packet_buffer
                }).
 
 -define(TIMEOUT, 120000).
@@ -59,7 +61,7 @@ set_socket(Pid, Socket) when is_pid(Pid), is_port(Socket) ->
 %%-------------------------------------------------------------------------
 init([]) ->
     process_flag(trap_exit, true),
-    {ok, 'WAIT_FOR_SOCKET', #state{}}.
+    {ok, 'WAIT_FOR_SOCKET', #state{client_state=initial, packet_buffer = <<>>}}.
 
 %%-------------------------------------------------------------------------
 %% Func: StateName/2
@@ -81,10 +83,18 @@ init([]) ->
     {next_state, 'WAIT_FOR_SOCKET', State}.
 
 %% Notification event coming from client
-'WAIT_FOR_DATA'({data, Data}, #state{socket=S} = State) ->
-    io:format("Data: ~p~n", [Data]),
-    ok = gen_tcp:send(S, Data),
-    {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT};
+'WAIT_FOR_DATA'({data, Data}, #state{socket = S, client_state=ClientState, packet_buffer=PacketBuffer} = State) ->
+    CombinedData = <<PacketBuffer/binary, Data/binary>>,
+    case mc:handle_data(CombinedData) of
+        {more, PartialData} ->
+            {next_state, 'WAIT_FOR_DATA', State#state{packet_buffer = PartialData}, ?TIMEOUT};
+        {done, DecodedPacket, Rest} ->
+            case mc:handle_packet(ClientState, DecodedPacket) of
+                none -> ok;
+                Reply -> ok = gen_tcp:send(S, Reply), ok
+            end,
+            {next_state, 'WAIT_FOR_DATA', State#state{packet_buffer = Rest}, ?TIMEOUT}
+    end;
 
 'WAIT_FOR_DATA'(timeout, State) ->
     io:format("Timeout: ~n", []),
@@ -94,6 +104,7 @@ init([]) ->
 'WAIT_FOR_DATA'(Data, State) ->
     io:format("~p Ignoring data: ~p\n", [self(), Data]),
     {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT}.
+
 
 %%-------------------------------------------------------------------------
 %% Func: handle_event/3
