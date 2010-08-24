@@ -113,6 +113,12 @@ init([]) ->
 %%          {stop, Reason, NewStateData}
 %% @private
 %%-------------------------------------------------------------------------
+handle_event({packet, Data}, StateName, #state{socket = S} = StateData) ->
+    io:format("OOB: Packet data: ~p~n", [Data]),
+    io:format("Len: ~p~n", [size(Data)]),
+    ok = gen_tcp:send(S, Data),
+    {next_state, StateName, StateData};
+
 handle_event(Event, StateName, StateData) ->
     {stop, {StateName, undefined_event, Event}, StateData}.
 
