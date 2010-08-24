@@ -22,7 +22,8 @@
                 socket,    % client socket
                 addr,      % client address
                 client_state,
-                packet_buffer
+                packet_buffer,
+                socket_log
                }).
 
 -define(TIMEOUT, 120000).
@@ -61,7 +62,8 @@ set_socket(Pid, Socket) when is_pid(Pid), is_port(Socket) ->
 %%-------------------------------------------------------------------------
 init([]) ->
     process_flag(trap_exit, true),
-    {ok, 'WAIT_FOR_SOCKET', #state{client_state=initial, packet_buffer = <<>>}}.
+    {ok, File} = file:open("socket.log", write),
+    {ok, 'WAIT_FOR_SOCKET', #state{client_state=initial, packet_buffer = <<>>, socket_log = File}}.
 
 %%-------------------------------------------------------------------------
 %% Func: StateName/2
@@ -113,10 +115,12 @@ init([]) ->
 %%          {stop, Reason, NewStateData}
 %% @private
 %%-------------------------------------------------------------------------
-handle_event({packet, Data}, StateName, #state{socket = S} = StateData) ->
-    io:format("OOB: Packet data: ~p~n", [Data]),
-    io:format("Len: ~p~n", [size(Data)]),
+handle_event({packet, Data}, StateName, #state{socket = S, socket_log = Log} = StateData) ->
+    %io:format("OOB: Packet data: ~p~n", [Data]),
+    %io:format("Len: ~p~n", [size(Data)]),
     ok = gen_tcp:send(S, Data),
+    ok = file:write(Log, Data),
+    file:sync(Log),
     {next_state, StateName, StateData};
 
 handle_event(Event, StateName, StateData) ->
@@ -161,8 +165,9 @@ handle_info(_Info, StateName, StateData) ->
 %% Returns: any
 %% @private
 %%-------------------------------------------------------------------------
-terminate(_Reason, _StateName, #state{socket=Socket}) ->
+terminate(_Reason, _StateName, #state{socket=Socket, socket_log = Log}) ->
     (catch gen_tcp:close(Socket)),
+    file:close(Log),
     ok.
 
 %%-------------------------------------------------------------------------

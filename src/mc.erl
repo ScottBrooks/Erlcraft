@@ -58,7 +58,11 @@ handle_packet(_State, {player_move_look, X, Y, S, Z, R, P, U}) ->
     none;
 
 handle_packet(_State, {loaded, _Loaded}) ->
-    %io:format("Loaded: ~p~n", [_Loaded]),
+    case _Loaded of
+        0 -> ok;
+        Value ->
+            io:format("Loaded: ~p~n", [Value])
+    end,
     none;
 handle_packet(_State, {keepalive} ) ->
     mc_reply:keepalive();
@@ -69,5 +73,4 @@ handle_packet(_State, Unknown) ->
     
 send_world(Pid) ->
     timer:sleep(1000),
-    Data = mc_util:fake_world(),
-    gen_fsm:send_all_state_event(Pid, {packet, Data}).
+    mc_util:fake_world(Pid).

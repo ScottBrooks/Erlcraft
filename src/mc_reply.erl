@@ -15,3 +15,6 @@ keepalive() ->
 
 position_and_look(X, Y, Z, Stance, Rotation, Pitch) ->
     mc_util:write_packet(13, [{double, X}, {double, Y}, {double, Stance}, {double, Z}, {float, Rotation}, {float, Pitch}, {bool, 0}]).
+
+timestamp(Time) ->
+    mc_util:write_packet(4, [{long, Time}]).
