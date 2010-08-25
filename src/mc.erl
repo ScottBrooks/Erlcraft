@@ -72,5 +72,4 @@ handle_packet(_State, Unknown) ->
     <<"">>.
     
 send_world(Pid) ->
-    timer:sleep(1000),
-    mc_util:fake_world(Pid).
+    mc_reply:fake_world(Pid).
