@@ -6,7 +6,7 @@
 
 -behaviour(gen_fsm).
 
--export([start_link/0, set_socket/2]).
+-export([start_link/0, set_socket/2, send_packet/2]).
 
 %% gen_fsm callbacks
 -export([init/1, handle_event/3,
@@ -21,9 +21,9 @@
 -record(state, {
                 socket,    % client socket
                 addr,      % client address
-                client_state,
                 packet_buffer,
-                socket_log
+                socket_log,
+                client
                }).
 
 -define(TIMEOUT, 120000).
@@ -48,6 +48,9 @@ set_socket(Pid, Socket) when is_pid(Pid), is_port(Socket) ->
     io:format("socket set!~n", []),
     gen_fsm:send_event(Pid, {socket_ready, Socket}).
 
+send_packet(Pid, Data) when is_pid(Pid) ->
+    gen_fsm:send_all_state_event(Pid, {packet, Data}).
+
 %%%------------------------------------------------------------------------
 %%% Callback functions from gen_server
 %%%------------------------------------------------------------------------
@@ -62,8 +65,10 @@ set_socket(Pid, Socket) when is_pid(Pid), is_port(Socket) ->
 %%-------------------------------------------------------------------------
 init([]) ->
     process_flag(trap_exit, true),
-    {ok, File} = file:open("socket.log", write),
-    {ok, 'WAIT_FOR_SOCKET', #state{client_state=initial, packet_buffer = <<>>, socket_log = File}}.
+    {ok, File} = file:open("socketlog", write),
+    {ok, Client} = gen_server:start_link(erlcraft_client, [self()], []),
+    io:format("FSM Pid: ~p~n", [self()]),
+    {ok, 'WAIT_FOR_SOCKET', #state{packet_buffer = <<>>, socket_log = File, client = Client}}.
 
 %%-------------------------------------------------------------------------
 %% Func: StateName/2
@@ -85,13 +90,13 @@ init([]) ->
     {next_state, 'WAIT_FOR_SOCKET', State}.
 
 %% Notification event coming from client
-'WAIT_FOR_DATA'({data, Data}, #state{socket = S, client_state=ClientState, packet_buffer=PacketBuffer} = State) ->
+'WAIT_FOR_DATA'({data, Data}, #state{socket = S, client=ClientPid, packet_buffer=PacketBuffer} = State) ->
     CombinedData = <<PacketBuffer/binary, Data/binary>>,
     case mc:handle_data(CombinedData) of
         {more, PartialData} ->
             {next_state, 'WAIT_FOR_DATA', State#state{packet_buffer = PartialData}, ?TIMEOUT};
         {done, DecodedPacket, Rest} ->
-            case mc:handle_packet(ClientState, DecodedPacket) of
+            case mc:handle_packet(ClientPid, DecodedPacket) of
                 none -> ok;
                 Reply -> ok = gen_tcp:send(S, Reply), ok
             end,

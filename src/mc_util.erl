@@ -17,25 +17,25 @@ encode_list([H|T], Acc) ->
 encode_list(List) ->
     encode_list(List, <<>>).
 
-encode_value({int, Int}) ->
+encode_value({int, Int}) when is_integer(Int)->
     <<Int:32/integer-signed-big>>;
-encode_value({bool, Bool}) ->
+encode_value({bool, Bool}) when is_integer(Bool) ->
     <<Bool:8>>;
-encode_value({long, Long}) ->
+encode_value({long, Long}) when is_integer(Long) ->
     <<Long:64/integer-signed-big>>;
-encode_value({short, Short}) ->
+encode_value({short, Short}) when is_integer(Short) ->
     <<Short:16/integer-signed-big>>;
-encode_value({byte, Byte}) ->
+encode_value({byte, Byte}) when is_integer(Byte) ->
     <<Byte:8>>;
-encode_value({nibble, Nibble}) ->
+encode_value({nibble, Nibble}) when is_integer(Nibble) ->
     <<Nibble:4>>;
-encode_value({double, Double}) ->
+encode_value({double, Double}) when is_float(Double)->
     <<Double:64/float>>;
-encode_value({float, Float}) ->
+encode_value({float, Float}) when is_float(Float) ->
     <<Float:32/float>>;
-encode_value({binary, Binary}) ->
+encode_value({binary, Binary}) when is_binary(Binary) ->
     Binary;
-encode_value({string, String}) ->
+encode_value({string, String}) when is_list(String) ->
     Len = length(String),
     BinVal = list_to_binary(String),
     <<Len:16/integer-signed-big, BinVal/binary>>.
@@ -62,9 +62,9 @@ chunk_data(Blocks) ->
             end,
             case Y of
                 0 -> {block, 7, 0, Light};
-                Ground when Ground >=0, Ground =< 63 ->
+                Ground when Ground >=0, Ground =< 30 ->
                     {block, 3,0,Light};
-                Ground when Ground == 64 ->
+                Ground when Ground == 31 ->
                     {block, 2,0,Light};
                 _ ->
                     {block, 0,0,Light}

@@ -1,6 +1,6 @@
 -module(mc).
 
--export([handle_packet/2, handle_data/1, send_world/1]).
+-export([handle_packet/2, handle_data/1]).
 
 % Packet macros
 % If we have multiple strings in one packet, we need to use the other PKT_STRING2,N macros
@@ -44,17 +44,18 @@ handle_data(Data) ->
             {more, Data}
     end.
 
-handle_packet(_State, {handshake, PlayerName}) ->
-    io:format("Welcome: ~p~n", [PlayerName]),
+handle_packet(_Client, {handshake, PlayerName}) ->
+    io:format("C->S: Welcome: ~p~n", [PlayerName]),
     mc_reply:handshake(false);
 
-handle_packet(_State, {login, PlayerID, Username, Password}) ->
-    io:format("PlayerID: ~p~nLogin: ~p~nPass: ~p~n", [PlayerID, Username, Password]),
-    spawn(mc,send_world, [self()]),
+handle_packet(_Client, {login, PlayerID, Username, Password}) ->
+    io:format("C->S: PlayerID: ~p~nLogin: ~p~nPass: ~p~n", [PlayerID, Username, Password]),
     mc_reply:login(0, "", "");
 
-handle_packet(_State, {player_move_look, X, Y, S, Z, R, P, U}) ->
-    io:format("PML: [~p,~p,~p] [~p,~p~p] ~p~n", [X,Y,Z, S,R,P,U]),
+handle_packet(Client, {player_move_look, X, Y, S, Z, R, P, U}) ->
+    gen_server:cast(Client, {position, X, Y, Z, S, R, P}),
+
+    io:format("C->S: PML: [~p,~p,~p] [~p,~p,~p] ~p~n", [X,Y,Z, S,R,P,U]),
     none;
 
 handle_packet(_State, {loaded, _Loaded}) ->
@@ -70,6 +71,3 @@ handle_packet(_State, {keepalive} ) ->
 handle_packet(_State, Unknown) ->
     io:format("Unknown Packet: ~p~n", [Unknown]),
     <<"">>.
-    
-send_world(Pid) ->
-    mc_reply:fake_world(Pid).
