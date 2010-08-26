@@ -31,8 +31,18 @@ generate_chunk(X, Y, Z, SizeX, SizeY, SizeZ) ->
 
 teleport(PlayerID, X, Y, Z, R, P) ->
     mc_util:write_packet(16#22, [{int, PlayerID}, {int, X}, {int, Y}, {int, Z}, {byte, R}, {byte, P}]).
+entity_spawn(EntityID, X, Y, Z, R, P) ->
+    mc_util:write_packet(16#15, [{int, EntityID}, {short, 4}, {byte, 1}, {int, X}, {int, Y}, {int, Z}, {byte, R}, {byte, P}, {byte, 12}]).
+
+entity_add_mob(EntityID, Type, X, Y, Z, R, P) ->
+    mc_util:write_packet(16#18, [{int, EntityID}, {byte, Type}, {int, X}, {int, Y}, {int, Z}, {byte, R}, {byte, P}]).
+
+chat(Message) ->
+    mc_util:write_packet(16#03, [{string, Message}]).
+
 
 fake_world(Pid, LocX, LocY, LocZ) ->
+    erlcraft_client_fsm:send_packet(Pid, mc_reply:chat("Hello world")),
     lists:map(
         fun(I) ->
             X = trunc(I/8),
@@ -43,5 +53,6 @@ fake_world(Pid, LocX, LocY, LocZ) ->
             erlcraft_client_fsm:send_packet(Pid, Chunk)
         end,
         lists:seq(0,1)),
+    erlcraft_client_fsm:send_packet(Pid, mc_reply:entity_spawn(1, trunc(LocX)*32, trunc(LocY)*32, trunc(LocZ)*32, 0, 0)),
     ok.
 
