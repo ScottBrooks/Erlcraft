@@ -23,7 +23,8 @@
 -define(PKT_PLAYER_POSITION(X,Y,Z,S,U),      <<16#0B, ?PKT_DOUBLE(X), ?PKT_DOUBLE(Y), ?PKT_DOUBLE(S), ?PKT_DOUBLE(Z), ?PKT_BOOL(U), Rest/binary>>).
 -define(PKT_PLAYER_LOOK(R,P,U),              <<16#0C, ?PKT_FLOAT(R), ?PKT_FLOAT(P), ?PKT_BOOL(U), Rest/binary>>).
 -define(PKT_PLAYER_MOVE_LOOK(X,Y,Z,S,R,P,U), <<16#0D, ?PKT_DOUBLE(X), ?PKT_DOUBLE(Y), ?PKT_DOUBLE(S), ?PKT_DOUBLE(Z), ?PKT_FLOAT(R), ?PKT_FLOAT(P), ?PKT_BOOL(U), Rest/binary>>).
--define(PKT_ARM_ANIMATION(EntityID, U),      <<16#11, ?PKT_INTEGER(EntityID), ?PKT_BYTE(U), Rest/binary>>).
+-define(PKT_BLOCK_DIG(S, X, Y, Z, U),   <<16#0E, ?PKT_BYTE(S), ?PKT_INTEGER(X), ?PKT_BYTE(Y), ?PKT_INTEGER(Z), ?PKT_BYTE(U), Rest/binary>>).
+-define(PKT_ARM_ANIMATION(EntityID, U),      <<16#12, ?PKT_INTEGER(EntityID), ?PKT_BYTE(U), Rest/binary>>).
 
 handle_data(Data) ->
     case Data of
@@ -50,6 +51,10 @@ handle_data(Data) ->
         ?PKT_PLAYER_MOVE_LOOK(X, Y, Z, S, R, P, U) ->
             io:format("Look: [~p,~p,~p]~n", [X,Y,Z]),
             {done, {player_move_look, X, Y, Z, S, R, P, U}, Rest};
+        ?PKT_BLOCK_DIG(Status, X, Y, Z, U) ->
+            io:format("Dig: [~p,~p,~p]~n", [X, Y, Z]),
+            {done, {block_dig, Status, X, Y, Z, U}, Rest};
+        % 0x12 - Arm Animation
         ?PKT_ARM_ANIMATION(EntityID, U) ->
             {done, {arm_animation, EntityID, U}, Rest};
         _ ->

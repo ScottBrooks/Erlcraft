@@ -58,19 +58,24 @@ chunk_data(Blocks) ->
             Z = trunc(Idx/2048),
             X = trunc((Idx-Z*2048)/128),
             Y = Idx - Z*2048 - X*128,
-            Light = case Y of
+            Light = case 128-Y of
                 Dark when Dark >= 0, Dark =< 63 ->
                     0;
                 _ ->
                     255
             end,
-            case Y of
-                0 -> {block, 7, 0, Light};
-                Ground when Ground >=0, Ground =< 30 ->
+            case 128-Y of
+                0 ->
+                    %io:format("Bedrock: [~p, ~p, ~p]~n", [X, Y, Z]),
+                    {block, 7, 0, Light};
+                Ground when Ground >=0, Ground =< 63 ->
+                    %io:format("Dirt: [~p, ~p, ~p]~n", [X, Y, Z]),
                     {block, 3,0,Light};
-                Ground when Ground == 31 ->
+                Ground when Ground == 64 ->
+                    %io:format("Grass: [~p, ~p, ~p]~n", [X, Y, Z]),
                     {block, 2,0,Light};
                 _ ->
+                    %io:format("Air: [~p, ~p, ~p]~n", [X, Y, Z]),
                     {block, 0,0,Light}
             end
         end, array:new(Blocks)),
