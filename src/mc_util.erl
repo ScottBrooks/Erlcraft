@@ -31,8 +31,12 @@ encode_value({nibble, Nibble}) when is_integer(Nibble) ->
     <<Nibble:4>>;
 encode_value({double, Double}) when is_float(Double)->
     <<Double:64/float>>;
+encode_value({double, Double}) when is_integer(Double) ->
+    encode_value({double, float(Double)});
 encode_value({float, Float}) when is_float(Float) ->
     <<Float:32/float>>;
+encode_value({float, Float}) when is_integer(Float) ->
+    encode_value({float, float(Float)});
 encode_value({binary, Binary}) when is_binary(Binary) ->
     Binary;
 encode_value({string, String}) when is_list(String) ->

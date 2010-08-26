@@ -12,6 +12,7 @@
 -define(PKT_FLOAT2(FloatValue2), FloatValue2:32/float).
 -define(PKT_DOUBLE(DoubleValue), DoubleValue:64/float).
 -define(PKT_BOOL(BoolValue), BoolValue:8).
+-define(PKT_BYTE(ByteValue), ByteValue:8).
 
 % Client -> Server
 
@@ -20,8 +21,9 @@
 -define(PKT_HANDSHAKE(PlayerName),           <<16#2, ?PKT_STRING(PlayerName), Rest/binary>>).
 -define(PKT_LOADED(Loaded),                  <<16#0A, ?PKT_BOOL(Loaded), Rest/binary>>).
 -define(PKT_PLAYER_POSITION(X,Y,Z,S,U),      <<16#0B, ?PKT_DOUBLE(X), ?PKT_DOUBLE(Y), ?PKT_DOUBLE(S), ?PKT_DOUBLE(Z), ?PKT_BOOL(U), Rest/binary>>).
--define(PKT_PLAYER_LOOK(R,P,U),              <<16#0C, ?PKT_FLOAT(R), ?PKT_FLOAT(P), ?PKT_FLOAT(U), Rest/binary>>).
+-define(PKT_PLAYER_LOOK(R,P,U),              <<16#0C, ?PKT_FLOAT(R), ?PKT_FLOAT(P), ?PKT_BOOL(U), Rest/binary>>).
 -define(PKT_PLAYER_MOVE_LOOK(X,Y,Z,S,R,P,U), <<16#0D, ?PKT_DOUBLE(X), ?PKT_DOUBLE(Y), ?PKT_DOUBLE(S), ?PKT_DOUBLE(Z), ?PKT_FLOAT(R), ?PKT_FLOAT(P), ?PKT_BOOL(U), Rest/binary>>).
+-define(PKT_ARM_ANIMATION(EntityID, U),      <<16#11, ?PKT_INTEGER(EntityID), ?PKT_BYTE(U), Rest/binary>>).
 
 handle_data(Data) ->
     case Data of
@@ -48,6 +50,8 @@ handle_data(Data) ->
         ?PKT_PLAYER_MOVE_LOOK(X, Y, Z, S, R, P, U) ->
             io:format("Look: [~p,~p,~p]~n", [X,Y,Z]),
             {done, {player_move_look, X, Y, Z, S, R, P, U}, Rest};
+        ?PKT_ARM_ANIMATION(EntityID, U) ->
+            {done, {arm_animation, EntityID, U}, Rest};
         _ ->
             io:format("More: [~p]~n", [Data]),
             {more, Data}

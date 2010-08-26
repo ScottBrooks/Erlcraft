@@ -21,11 +21,12 @@ handle_call(_Request, _From, _State) ->
 handle_cast({move_look, X,Y,Z, S, R, P}, #state{fsm = FSMPid, loc = Location} = State) ->
     case Location of
         undefined ->
-            mc_reply:fake_world(FSMPid, X, Y, Z);
+            mc_reply:fake_world(FSMPid, 32, 0, 0, 0),
+            LocY = 5,
+            erlcraft_client_fsm:send_packet(FSMPid, mc_reply:position_and_look(0, LocY * 32, 0, (LocY*32)-1.5, R, P));
         _ -> ok
     end,
 
-    erlcraft_client_fsm:send_packet(FSMPid, mc_reply:position_and_look(X, Y, Z, S, R, P)),
     {noreply, State#state{loc = {X, Y, Z, S, R, P}}};
 handle_cast({postion, X, Y, Z, S, _U}, #state{loc = {_, _, _, _, R, P}} = State) ->
     {noreply, State#state{loc = {X, Y, Z, S, R, P}}};
