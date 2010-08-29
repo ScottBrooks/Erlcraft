@@ -61,6 +61,13 @@ init([Port, Module]) ->
                   infinity,                                % Shutdown = brutal_kill | int() >= 0 | infinity
                   supervisor,                              % Type     = worker | supervisor
                   []                                       % Modules  = [Module] | dynamic
+              },
+              {   mc_world,
+                  {mc_world, start_link, [fake]},
+                  permanent,
+                  2000,
+                  worker,
+                  [mc_world]
               }
             ]
         }

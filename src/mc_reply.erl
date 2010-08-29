@@ -20,15 +20,6 @@ position_and_look(X, Y, Z, Stance, Rotation, Pitch) ->
 timestamp(Time) ->
     mc_util:write_packet(16#4, [{long, Time}]).
 
-generate_pre_chunk(X,Z, Update) ->
-    mc_util:write_packet(16#32, [{int, X}, {int, Z}, {bool, Update}]).
-
-generate_chunk(X, Y, Z, SizeX, SizeY, SizeZ) ->
-    Data = mc_util:chunk_data(SizeX * SizeY * SizeX),
-    Compressed = zlib:compress(mc_util:encode_list(Data)),
-
-    mc_util:write_packet(16#33, lists:flatten([{int, X*16}, {short, Y}, {int, Z*16}, {byte, SizeX-1}, {byte, SizeY-1}, {byte, SizeZ-1}, {int, size(Compressed)}, {binary, Compressed}])).
-
 teleport(PlayerID, X, Y, Z, R, P) ->
     mc_util:write_packet(16#22, [{int, PlayerID}, {int, X}, {int, Y}, {int, Z}, {byte, R}, {byte, P}]).
 entity_spawn(EntityID, X, Y, Z, R, P) ->
@@ -51,12 +42,13 @@ fake_world(Pid, BlockCount, LocX, LocY, LocZ) ->
             ChunkX = trunc(LocX + X - (Width/2)),
             ChunkZ = trunc(LocZ + Z - (Width/2)),
             io:format("Chunk at: [~p, ~p]~n", [ChunkX, ChunkZ]),
-            PreChunk = generate_pre_chunk(ChunkX, ChunkZ, 1),
+            %PreChunk = generate_pre_chunk(ChunkX, ChunkZ, 1),
+            %Chunk = generate_chunk(ChunkX,0,ChunkZ, 16,128,16),
+            {chunk, PreChunk, Chunk} = mc_world:get_chunk(ChunkX, 0, ChunkZ),
             erlcraft_client_fsm:send_packet(Pid, PreChunk),
-            Chunk = generate_chunk(ChunkX,0,ChunkZ, 16,128,16),
             erlcraft_client_fsm:send_packet(Pid, Chunk)
         end,
         lists:seq(0,BlockCount)),
     %erlcraft_client_fsm:send_packet(Pid, mc_reply:entity_spawn(1, trunc(LocX)*32, trunc(LocY)*32, trunc(LocZ)*32, 0, 0)),
-    ok.
 
+    {spawn_location, 0, 66, 0}.

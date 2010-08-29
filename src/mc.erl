@@ -24,7 +24,7 @@
 -define(PKT_HANDSHAKE(PlayerName),               <<16#02, ?PKT_STRING(PlayerName), Rest/binary>>).
 -define(PKT_CHAT(Message),                       <<16#03, ?PKT_STRING(Message), Rest/binary>>).
 -define(PKT_UPDATE_TIME(Time),                   <<16#04, ?PKT_LONG(Time), Rest/binary>>).
--define(PKT_FLYING(Loaded),                      <<16#0A, ?PKT_BOOL(Flying), Rest/binary>>).
+-define(PKT_FLYING(Flying),                      <<16#0A, ?PKT_BOOL(Flying), Rest/binary>>).
 -define(PKT_PLAYER_POSITION(X,Y,Z,S,U),          <<16#0B, ?PKT_DOUBLE(X), ?PKT_DOUBLE(Y), ?PKT_DOUBLE(S), ?PKT_DOUBLE(Z), ?PKT_BOOL(U), Rest/binary>>).
 -define(PKT_PLAYER_LOOK(R,P,U),                  <<16#0C, ?PKT_FLOAT(R), ?PKT_FLOAT(P), ?PKT_BOOL(U), Rest/binary>>).
 -define(PKT_PLAYER_MOVE_LOOK(X,Y,Z,S,R,P,U),     <<16#0D, ?PKT_DOUBLE(X), ?PKT_DOUBLE(Y), ?PKT_DOUBLE(S), ?PKT_DOUBLE(Z), ?PKT_FLOAT(R), ?PKT_FLOAT(P), ?PKT_BOOL(U), Rest/binary>>).
@@ -144,33 +144,37 @@ handle_data(Data) ->
         ?PKT_KICK(Message) ->
             {done, {kick, Message}, Rest};
         _ ->
-            io:format("More: [~p]~n", [Data]),
+            %io:format("More: [~p]~n", [Data]),
             {more, Data}
     end.
 
 handle_packet(_Client, {handshake, PlayerName}) ->
-    io:format("C->S: Welcome: ~p~n", [PlayerName]),
+%    io:format("C->S: Welcome: ~p~n", [PlayerName]),
     mc_reply:handshake(false);
 
 handle_packet(Client, {login, PlayerID, Username, Password}) ->
-    io:format("C->S: PlayerID: ~p~nLogin: ~p~nPass: ~p~n", [PlayerID, Username, Password]),
+%    io:format("C->S: PlayerID: ~p~nLogin: ~p~nPass: ~p~n", [PlayerID, Username, Password]),
     gen_server:cast(Client, {player_id, PlayerID}),
     mc_reply:login(PlayerID, "", "");
 
 handle_packet(Client, {player_move_look, X, Y, Z, S, R, P, U}) ->
     gen_server:cast(Client, {move_look, X, Y, Z, S, R, P}),
 
-    io:format("C->S: PML: [~p,~p,~p] [~p,~p,~p] ~p~n", [X,Y,Z, S,R,P,U]),
+%    io:format("C->S: PML: [~p,~p,~p] [~p,~p,~p] ~p~n", [X,Y,Z, S,R,P,U]),
     none;
 
 handle_packet(Client, {player_look, R, P, U}) ->
     gen_server:cast(Client, {look, R, P, U}),
-    io:format("C->S: L: [~p,~p,~p]~n", [R,P,U]),
+%    io:format("C->S: L: [~p,~p,~p]~n", [R,P,U]),
     none;
 
 handle_packet(Client, {player_position, X, Y, Z, S, U}) ->
     gen_server:cast(Client, {position, X, Y, Z, S, U}),
-    io:format("C->S: P: [~p,~p,~p,~p]~p~n", [X, Y, Z, S, U]),
+%    io:format("C->S: P: [~p,~p,~p,~p]~p~n", [X, Y, Z, S, U]),
+    none;
+
+handle_packet(Client, {flying, Flying}) ->
+    gen_server:cast(Client, {flying, Flying}),
     none;
 
 handle_packet(_State, {loaded, _Loaded}) ->
