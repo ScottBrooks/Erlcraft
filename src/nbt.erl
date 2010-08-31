@@ -28,10 +28,19 @@
 
 
 load_file(Path) ->
-    {ok, CompressedData} = file:read_file(Path),
-    Data = zlib:gunzip(CompressedData),
-    Parsed = parse_nbt(Data),
-    io:format("Parsed Data: ~p~n", [Parsed]).
+    case file:read_file(Path) of
+        {ok, CompressedData} ->
+            Data = zlib:gunzip(CompressedData),
+            parse_nbt_data(Data);
+        {error, enoent} ->
+            io:format("Unable to open: ~p~n", [Path]),
+            {error, enoent}
+    end.
+
+parse_nbt_data(Data) ->
+    {<<>>, [{eof}, {tag_compound, <<>>, [Parsed, {tag_end}]}]} = parse_nbt(Data),
+    Parsed.
+
 
 parse_nbt(Data) ->
     parse_nbt(Data, []).
@@ -39,10 +48,8 @@ parse_nbt(Data) ->
 parse_nbt(Data, Buffer) ->
     case parse_nbt_stream(Data) of
         {done, DecodedPacket, <<>>} ->
-            io:format("Buffer End:~n", []),
             {<<>>, [DecodedPacket|Buffer]};
         {done, DecodedPacket, Rest} ->
-            io:format("DP: ~pB: ~p~n", [DecodedPacket, Buffer]),
             case DecodedPacket of
                 {tag_end} -> {Rest, Buffer};
                 {tag_list, Name, Type, Length} ->
@@ -71,8 +78,7 @@ parse_nbt_stream(Data) ->
         ?TAG_List(Name, Type, Length) -> {done, {tag_list, Name, Type, Length}, Rest};
         ?TAG_Compound(Name)           -> {done, {tag_compound, Name}, Rest};
         <<>>                          -> {done, {eof}, <<>>};
-        _ -> io:format("Unknown: ~p~n", [Data]),
-            {done, {tag_unknown, Data}, <<>>}
+        _                             -> {done, {tag_unknown, Data}, <<>>}
     end.
 
 parse_nbt_list(Data, _Type, 0, Buffer) ->

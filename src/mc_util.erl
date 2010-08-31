@@ -6,6 +6,16 @@ write_packet(PacketID, Contents) ->
     BinaryData = encode_list(Contents),
     <<PacketID:8, BinaryData/binary>>.
 
+expand_4_to_8(Bytes) ->
+    expand_4_to_8(Bytes, <<>>).
+
+expand_4_to_8(<<>>, Buffer) ->
+    Buffer;
+expand_4_to_8(Bytes, Buffer) ->
+    <<Chunk:4/bits, Rest/bits>> = Bytes,
+    ByteChunk = << <<0:4>>/bits, Chunk/bits>>,
+    NewBuff = <<ByteChunk/bits, Buffer/bits>>,
+    expand_4_to_8(Rest, NewBuff).
 
 encode_list([], Acc) ->
     Acc;

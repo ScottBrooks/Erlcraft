@@ -4,20 +4,44 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--record(state, {}).
+-record(state, {world_path, world}).
 
 %% External API
--export([start_link/1, get_chunk/3, get_spawn/0]).
+-export([start_link/1, get_chunk/3, get_spawn/0, load_chunk/4]).
 
 generate_pre_chunk(X,Z, Update) ->
     mc_util:write_packet(16#32, [{int, X}, {int, Z}, {bool, Update}]).
 
-generate_chunk(X, Y, Z, SizeX, SizeY, SizeZ) ->
-    Data = mc_util:chunk_data(SizeX * SizeY * SizeX),
-    Compressed = zlib:compress(mc_util:encode_list(Data)),
+%generate_chunk(X, Y, Z, SizeX, SizeY, SizeZ) ->
+%    Data = mc_util:chunk_data(SizeX * SizeY * SizeX),
+%    Compressed = zlib:compress(mc_util:encode_list(Data)),
+%    mc_util:write_packet(16#33, lists:flatten([{int, X*16}, {short, Y}, {int, Z*16}, {byte, SizeX-1}, {byte, SizeY-1}, {byte, SizeZ-1}, {int, size(Compressed)}, {binary, Compressed}])).
+
+load_chunk(X,Y,Z, Root) ->
+    F1 = string:to_lower(case X of
+        PosX when PosX >= 0 ->
+            erlang:integer_to_list(X rem 64, 36);
+        _ ->
+            erlang:integer_to_list((64+X) rem 64, 36)
+    end),
+    F2 = string:to_lower(case Z of
+        PosZ when PosZ >= 0 ->
+            erlang:integer_to_list(Z rem 64, 36);
+        _ ->
+            erlang:integer_to_list((64+Z) rem 64, 36)
+    end),
+    FileName = string:join(["c", erlang:integer_to_list(X, 36), erlang:integer_to_list(Z, 36), "dat"], "."),
+    Path = string:join([Root, F1, F2, FileName], "/"),
+    Data = nbt:load_file(Path),
+    {tag_compound, <<"Level">>, LevelData} = Data,
+    {tag_byte_array, <<"Blocks">>, Blocks} = lists:keyfind(<<"Blocks">>, 2, LevelData),
+    {tag_byte_array, <<"BlockLight">>, BlockLight} = lists:keyfind(<<"BlockLight">>, 2, LevelData),
+    {tag_byte_array, <<"Data">>, MetaData} = lists:keyfind(<<"Data">>, 2, LevelData),
+    SizeX = 16, SizeY = 128, SizeZ = 16,
+    MetaInfo = mc_util:expand_4_to_8(MetaData),
+    ChunkData = [{binary, Blocks}, {binary, MetaInfo}, {binary, BlockLight}],
+    Compressed = zlib:compress(mc_util:encode_list(ChunkData)),
     mc_util:write_packet(16#33, lists:flatten([{int, X*16}, {short, Y}, {int, Z*16}, {byte, SizeX-1}, {byte, SizeY-1}, {byte, SizeZ-1}, {int, size(Compressed)}, {binary, Compressed}])).
-
-
 
 get_spawn() ->
     gen_server:call(?MODULE, {get_spawn}).
@@ -31,18 +55,37 @@ start_link(World) ->
 
 %% gen_server events
 
-init([_MapName]) ->
+init([MapName]) ->
     io:format("World Server started~n", []),
-    {ok, #state{}}.
+    {ok, Cwd} = file:get_cwd(),
+    Path = string:join([Cwd, MapName] , "/"),
+    LevelPath = string:join([Path, "level.dat"], "/"),
+    World = nbt:load_file(LevelPath),
+    {ok, #state{world_path = Path, world = World}}.
 
-handle_call({get_chunk, X, Y, Z}, _From, _State) when is_integer(X), is_integer(Z) ->
+handle_call({get_chunk, X, Y, Z}, _From, #state{world_path = WorldPath} = State) when is_integer(X), is_integer(Z) ->
     %io:format("Chunk Request: [~p, ~p, ~p]~n", [X, Y, Z]),
     PreChunk = generate_pre_chunk(X, Z, 1),
-    ChunkData = generate_chunk(X, Y, Z, 16, 128, 16),
-    {reply, {chunk, PreChunk, ChunkData}, _State};
+%    ChunkData = generate_chunk(X, Y, Z, 16, 128, 16),
+    ChunkData = load_chunk(X, Y, Z, WorldPath),
+    {reply, {chunk, PreChunk, ChunkData}, State};
 
-handle_call({get_spawn}, _From, _State) ->
-    {reply, {loc, 0, 96, 0, 94.5, 0.0, 0.0}, _State};
+handle_call({get_spawn}, _From, #state{world = World} = State) ->
+    {tag_compound, <<"Data">>, Data} = World,
+    SpawnX = case lists:keyfind(<<"SpawnX">>, 2, Data) of
+        {tag_int, <<"SpawnX">>, X} -> X;
+        _ -> 0
+    end,
+    SpawnY = case lists:keyfind(<<"SpawnY">>, 2, Data) of
+        {tag_int, <<"SpawnY">>, Y} -> Y;
+        _ -> 96
+    end,
+    SpawnZ = case lists:keyfind(<<"SpawnZ">>, 2, Data) of
+        {tag_int, <<"SpawnZ">>, Z} -> Z;
+        _ -> 0
+    end,
+    io:format("Spawning player at: [~p, ~p, ~p]~n", [SpawnX, SpawnY, SpawnZ]),
+    {reply, {loc, SpawnX, SpawnY, SpawnZ, SpawnY - 1.5, 0.0, 0.0}, State};
  
 handle_call(_Request, _From, _State) ->
     io:format("Call: ~p~n", [_Request]),

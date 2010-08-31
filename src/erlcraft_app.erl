@@ -63,7 +63,7 @@ init([Port, Module]) ->
                   []                                       % Modules  = [Module] | dynamic
               },
               {   mc_world,
-                  {mc_world, start_link, [fake]},
+                  {mc_world, start_link, ["World1"]},
                   permanent,
                   2000,
                   worker,
