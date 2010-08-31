@@ -72,20 +72,27 @@ handle_call({get_chunk, X, Y, Z}, _From, #state{world_path = WorldPath} = State)
 
 handle_call({get_spawn}, _From, #state{world = World} = State) ->
     {tag_compound, <<"Data">>, Data} = World,
-    SpawnX = case lists:keyfind(<<"SpawnX">>, 2, Data) of
-        {tag_int, <<"SpawnX">>, X} -> X;
-        _ -> 0
-    end,
-    SpawnY = case lists:keyfind(<<"SpawnY">>, 2, Data) of
-        {tag_int, <<"SpawnY">>, Y} -> Y;
-        _ -> 96
-    end,
-    SpawnZ = case lists:keyfind(<<"SpawnZ">>, 2, Data) of
-        {tag_int, <<"SpawnZ">>, Z} -> Z;
-        _ -> 0
+    {SX, SY, SZ} = case lists:keyfind(<<"Player">>, 2, Data) of
+        {tag_compound, <<"Player">>, PlayerInfo} ->
+            {tag_list, <<"Pos">>, _, [SpawnX, SpawnY, SpawnZ]} = lists:keyfind(<<"Pos">>, 2, PlayerInfo),
+            {SpawnX, SpawnY, SpawnZ};
+        _ ->
+            SpawnX = case lists:keyfind(<<"SpawnX">>, 2, Data) of
+                {tag_int, <<"SpawnX">>, X} -> X;
+                _ -> 0
+            end,
+            SpawnY = case lists:keyfind(<<"SpawnY">>, 2, Data) of
+                {tag_int, <<"SpawnY">>, Y} -> Y;
+                _ -> 96
+            end,
+            SpawnZ = case lists:keyfind(<<"SpawnZ">>, 2, Data) of
+                {tag_int, <<"SpawnZ">>, Z} -> Z;
+                _ -> 0
+            end,
+            {SpawnX, SpawnY, SpawnZ}
     end,
     io:format("Spawning player at: [~p, ~p, ~p]~n", [SpawnX, SpawnY, SpawnZ]),
-    {reply, {loc, SpawnX, SpawnY, SpawnZ, SpawnY - 1.5, 0.0, 0.0}, State};
+    {reply, {loc, SX, SY, SZ, SY - 1.5, 0.0, 0.0}, State};
  
 handle_call(_Request, _From, _State) ->
     io:format("Call: ~p~n", [_Request]),
