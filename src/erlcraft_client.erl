@@ -10,49 +10,25 @@
 -record(state, {fsm, timer_ref, client_start, loc, chunk_list, player_id}).
 
 
-update_chunks(X, Y, Z, FSMPid, ChunkList) ->
-    NewX = trunc(X/16),
-    NewY = trunc(Y/128),
-    NewZ = trunc(Z/16),
-    Keys = [
-        {pos, NewX, NewY, NewZ},
-        {pos, NewX - 1, NewY, NewZ},
-        {pos, NewX + 1, NewY, NewZ},
-        {pos, NewX, NewY, NewZ - 1},
-        {pos, NewX, NewY, NewZ + 1},
-        {pos, NewX - 1, NewY, NewZ - 1},
-        {pos, NewX + 1, NewY, NewZ + 1},
-        {pos, NewX + 1, NewY, NewZ - 1},
-        {pos, NewX - 1, NewY, NewZ + 1},
-        % nearest 2 neighbors
-        {pos, NewX + 2, NewY, NewZ},
-        {pos, NewX + 2, NewY, NewZ + 1},
-        {pos, NewX + 2, NewY, NewZ - 1},
-        {pos, NewX + 2, NewY, NewZ + 2},
-        {pos, NewX + 2, NewY, NewZ - 2},
-        {pos, NewX - 2, NewY, NewZ},
-        {pos, NewX - 2, NewY, NewZ + 1},
-        {pos, NewX - 2, NewY, NewZ - 1},
-        {pos, NewX - 2, NewY, NewZ + 2},
-        {pos, NewX - 2, NewY, NewZ - 2},
-
-        {pos, NewX + 1, NewY, NewZ + 2},
-        {pos, NewX + 1, NewY, NewZ - 2},
-        {pos, NewX - 1, NewY, NewZ + 2},
-        {pos, NewX - 1, NewY, NewZ - 2},
-        {pos, NewX, NewY, NewZ + 2},
-        {pos, NewX, NewY, NewZ - 2}
-    ],
+update_chunks(ChunkX, ChunkY, ChunkZ, FSMPid, ChunkList) ->
+    NewX = trunc(ChunkX/16),
+    NewY = trunc(ChunkY/128),
+    NewZ = trunc(ChunkZ/16),
+    Xs = lists:seq(NewX-3, NewX+3),
+    Zs = lists:seq(NewZ-3, NewZ+3),
+    Keys = lists:flatten(
+        lists:map(
+            fun(X) ->
+                lists:map(fun(Z) -> {pos, X, NewY, Z} end, Zs)
+            end, Xs)),
     ChunksToLoad = lists:filter(fun(Key) -> sets:is_element(Key, ChunkList) =:= false end, Keys),
     lists:foldl(fun(Key, Acc) ->
-            {pos, ChunkX, ChunkY, ChunkZ} = Key,
-            {chunk, PreChunk, Chunk} = mc_world:get_chunk(ChunkX, ChunkY, ChunkZ),
+            {pos, CX, CY, CZ} = Key,
+            {chunk, PreChunk, Chunk} = mc_world:get_chunk(CX, CY, CZ),
             erlcraft_client_fsm:send_packet(FSMPid, PreChunk),
             erlcraft_client_fsm:send_packet(FSMPid, Chunk),
             sets:add_element(Key, Acc)
         end, ChunkList, ChunksToLoad).
-
-
 
 init([FSMPid]) ->
     io:format("Started!~n", []),
