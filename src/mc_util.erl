@@ -14,7 +14,7 @@ expand_4_to_8(<<>>, Buffer) ->
 expand_4_to_8(Bytes, Buffer) ->
     <<Chunk:4/bits, Rest/bits>> = Bytes,
     ByteChunk = << <<0:4>>/bits, Chunk/bits>>,
-    NewBuff = <<ByteChunk/bits, Buffer/bits>>,
+    NewBuff = <<Buffer/bits, ByteChunk/bits>>,
     expand_4_to_8(Rest, NewBuff).
 
 encode_list([], Acc) ->
