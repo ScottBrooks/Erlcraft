@@ -30,7 +30,7 @@ load_chunk(X,Y,Z, Root) ->
         _ ->
             erlang:integer_to_list((64+Z) rem 64, 36)
     end),
-    FileName = string:join(["c", erlang:integer_to_list(X, 36), erlang:integer_to_list(Z, 36), "dat"], "."),
+    FileName = string:to_lower(string:join(["c", erlang:integer_to_list(X, 36), erlang:integer_to_list(Z, 36), "dat"], ".")),
     Path = string:join([Root, F1, F2, FileName], "/"),
     Data = nbt:load_file(Path),
     {tag_compound, <<"Level">>, LevelData} = Data,
@@ -39,9 +39,27 @@ load_chunk(X,Y,Z, Root) ->
     {tag_byte_array, <<"Data">>, MetaData} = lists:keyfind(<<"Data">>, 2, LevelData),
     SizeX = 16, SizeY = 128, SizeZ = 16,
     MetaInfo = mc_util:expand_4_to_8(MetaData),
-    ChunkData = [{binary, Blocks}, {binary, MetaInfo}, {binary, BlockLight}],
-    Compressed = zlib:compress(mc_util:encode_list(ChunkData)),
+    dbg_chunk(Blocks, MetaInfo, BlockLight),
+    Compressed = zlib:compress(<<Blocks/binary, MetaInfo/binary, BlockLight/binary>>),
     mc_util:write_packet(16#33, lists:flatten([{int, X*16}, {short, Y}, {int, Z*16}, {byte, SizeX-1}, {byte, SizeY-1}, {byte, SizeZ-1}, {int, size(Compressed)}, {binary, Compressed}])).
+
+dbg_chunk(<<>>, <<>>, <<>>) ->
+    ok;
+dbg_chunk(Blocks, MetaData, LightData) ->
+    <<Block:8/integer, RestBlocks/binary>> = Blocks,
+    %io:format("Block: ~p~n", [Block]),
+    <<Meta:8/integer, RestMeta/binary>> = MetaData,
+    %io:format("Meta: ~p~n", [Meta]),
+    <<Light:4/bits, RestLight/bits>> = LightData,
+    %io:format("Light: ~p~n", [Light]),
+    case Block of
+        71 ->
+            io:format("Iron door: ~p M: ~p L: ~p~n", [Block, Meta, Light]);
+        50 ->
+            io:format("Torch: ~p M: ~p L: ~p~n", [Block, Meta, Light]);
+        _ -> ok
+    end,
+    dbg_chunk(RestBlocks, RestMeta, RestLight).
 
 get_spawn() ->
     gen_server:call(?MODULE, {get_spawn}).
@@ -64,7 +82,7 @@ init([MapName]) ->
     {ok, #state{world_path = Path, world = World}}.
 
 handle_call({get_chunk, X, Y, Z}, _From, #state{world_path = WorldPath} = State) when is_integer(X), is_integer(Z) ->
-    %io:format("Chunk Request: [~p, ~p, ~p]~n", [X, Y, Z]),
+    io:format("Chunk Request: [~p, ~p, ~p]~n", [X, Y, Z]),
     PreChunk = generate_pre_chunk(X, Z, 1),
 %    ChunkData = generate_chunk(X, Y, Z, 16, 128, 16),
     ChunkData = load_chunk(X, Y, Z, WorldPath),
