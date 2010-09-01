@@ -65,6 +65,9 @@ handle_cast({player_id, PlayerID}, State) ->
 handle_cast({flying, _Flying}, State) ->
     {noreply, State};
 
+handle_cast({kick, Message}, State) ->
+    io:format("Kick: ~p~n", [Message]),
+    {stop, normal, State};
 handle_cast(_Request, _State) ->
     io:format("Cast: ~p~n", [_Request]),
     {noreply, _State}.

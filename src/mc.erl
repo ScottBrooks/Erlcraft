@@ -187,6 +187,10 @@ handle_packet(_State, {loaded, _Loaded}) ->
 handle_packet(_State, {keepalive} ) ->
     mc_reply:keepalive();
 
+handle_packet(Client, {kick, Message}) ->
+    gen_server:cast(Client, {kick, Message}),
+    none;
+
 handle_packet(_State, Unknown) ->
     io:format("Unknown Packet: ~p~n", [Unknown]),
     <<"">>.
