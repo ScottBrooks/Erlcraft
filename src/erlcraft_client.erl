@@ -41,14 +41,16 @@ handle_call(_Request, _From, _State) ->
     {reply, none, _State}.
 
 handle_cast({move_look, X,Y,Z, S, R, P}, #state{fsm = FSMPid, loc = Location, chunk_list = ChunkList} = State) ->
-    {loc, NewX, NewY, NewZ, NewStance, NewRotation, NewPitch} = case Location of
+    {loc, NewX, NewY, NewZ, NewStance, NewRotation, NewPitch, NewList} = case Location of
         undefined ->
             {loc, SpawnX, SpawnY, SpawnZ, SpawnStance, SpawnRotation, SpawnPitch} = mc_world:get_spawn(),
+            NewChunkList = update_chunks(SpawnX, SpawnY, SpawnZ, FSMPid, ChunkList),
             erlcraft_client_fsm:send_packet(FSMPid, mc_reply:position_and_look(SpawnX, SpawnY, SpawnZ, SpawnStance, SpawnRotation, SpawnPitch)),
-            {loc, SpawnX, SpawnY, SpawnZ, SpawnStance, SpawnRotation, SpawnPitch};
-        _ -> {loc, X, Y, Z, S, R, P}
+            {loc, SpawnX, SpawnY, SpawnZ, SpawnStance, SpawnRotation, SpawnPitch, NewChunkList};
+        _ ->
+            NewChunkList = update_chunks(X, Y, Z, FSMPid, ChunkList),
+            {loc, X, Y, Z, S, R, P, NewChunkList}
     end,
-    NewList = update_chunks(NewX, NewY, NewZ, FSMPid, ChunkList),
     {noreply, State#state{loc = {NewX, NewY, NewZ, NewStance, NewRotation, NewPitch}, chunk_list = NewList}};
 
 handle_cast({position, X, Y, Z, S, _U}, #state{loc = {_, _, _, _, R, P}, fsm = FSMPid, chunk_list = ChunkList} = State) ->
