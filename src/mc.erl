@@ -148,16 +148,16 @@ handle_data(Data) ->
             {more, Data}
     end.
 
-handle_packet(_Client, {handshake, PlayerName}) ->
+handle_packet(_Client, {handshake, _PlayerName}) ->
 %    io:format("C->S: Welcome: ~p~n", [PlayerName]),
     mc_reply:handshake(false);
 
-handle_packet(Client, {login, PlayerID, Username, Password}) ->
+handle_packet(Client, {login, PlayerID, _Username, _Password}) ->
 %    io:format("C->S: PlayerID: ~p~nLogin: ~p~nPass: ~p~n", [PlayerID, Username, Password]),
     gen_server:cast(Client, {player_id, PlayerID}),
     mc_reply:login(PlayerID, "", "");
 
-handle_packet(Client, {player_move_look, X, Y, Z, S, R, P, U}) ->
+handle_packet(Client, {player_move_look, X, Y, Z, S, R, P, _U}) ->
     gen_server:cast(Client, {move_look, X, Y, Z, S, R, P}),
 
 %    io:format("C->S: PML: [~p,~p,~p] [~p,~p,~p] ~p~n", [X,Y,Z, S,R,P,U]),

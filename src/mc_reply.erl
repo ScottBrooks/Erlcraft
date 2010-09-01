@@ -14,7 +14,7 @@ keepalive() ->
     mc_util:write_packet(16#0, []).
 
 position_and_look(X, Y, Z, Stance, Rotation, Pitch) ->
-    io:format("PML: [~p,~p,~p] [~p,~p,~p]~n", [X,Y,Z, Stance,Rotation,Pitch]),
+%    io:format("PML: [~p,~p,~p] [~p,~p,~p]~n", [X,Y,Z, Stance,Rotation,Pitch]),
     mc_util:write_packet(16#0D, [{double, X}, {double, Y}, {double, Stance}, {double, Z}, {float, Rotation}, {float, Pitch}, {bool, 0}]).
 
 timestamp(Time) ->

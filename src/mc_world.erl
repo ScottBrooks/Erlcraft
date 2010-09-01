@@ -55,6 +55,8 @@ dbg_chunk(Blocks, MetaData, LightData) ->
     case Block of
         71 ->
             io:format("Iron door: ~p M: ~p L: ~p~n", [Block, Meta, Light]);
+        65 ->
+            io:format("Ladder: ~p M: ~p L: ~p~n", [Block, Meta, Light]);
         50 ->
             io:format("Torch: ~p M: ~p L: ~p~n", [Block, Meta, Light]);
         _ -> ok
