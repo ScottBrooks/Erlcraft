@@ -100,7 +100,8 @@ init([]) ->
                 none -> ok;
                 Reply -> ok = gen_tcp:send(S, Reply), ok
             end,
-            {next_state, 'WAIT_FOR_DATA', State#state{packet_buffer = Rest}, ?TIMEOUT}
+            %Tail call back to ourself with the rest of the data
+            'WAIT_FOR_DATA'({data, Rest}, State#state{packet_buffer = <<>>})
     end;
 
 'WAIT_FOR_DATA'(timeout, State) ->
