@@ -41,7 +41,7 @@ start_link(Port, Module) when is_integer(Port), is_atom(Module) ->
 %%----------------------------------------------------------------------
 init([Port, Module]) ->
     process_flag(trap_exit, true),
-    Opts = [binary, {packet, raw}, {reuseaddr, true},
+    Opts = [binary, {packet, raw}, {reuseaddr, true}, {nodelay, true},
             {keepalive, true}, {backlog, 30}, {active, false}],
     case gen_tcp:listen(Port, Opts) of
     {ok, Listen_socket} ->
@@ -154,7 +154,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% listening socket to the new client socket.
 set_sockopt(ListSock, CliSocket) ->
     true = inet_db:register_socket(CliSocket, inet_tcp),
-    case prim_inet:getopts(ListSock, [active, nodelay, keepalive, delay_send, priority, tos]) of
+    case prim_inet:getopts(ListSock, [active, nodelay, keepalive, delay_send, priority, tos, sndbuf]) of
     {ok, Opts} ->
         case prim_inet:setopts(CliSocket, Opts) of
         ok    -> ok;
