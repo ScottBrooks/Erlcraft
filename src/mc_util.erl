@@ -6,6 +6,18 @@ write_packet(PacketID, Contents) ->
     BinaryData = encode_list(Contents),
     <<PacketID:8, BinaryData/binary>>.
 
+or_binaries(BinA, BinB) when size(BinA) =:= size(BinB) ->
+    or_binaries(BinA, BinB, <<>>).
+
+or_binaries(<<>>, <<>>, Buffer) ->
+    Buffer;
+or_binaries(BinA, BinB, Buffer) ->
+    <<A:8/integer, RestA/binary>> = BinA,
+    <<B:8/integer, RestB/binary>> = BinB,
+    C = A bor B,
+    NewBuffer = <<Buffer/binary, C:8/integer>>,
+    or_binaries(RestA, RestB, NewBuffer).
+
 expand_4_to_8(Bytes) ->
     expand_4_to_8(Bytes, <<>>).
 

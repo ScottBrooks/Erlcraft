@@ -7,7 +7,7 @@
 -record(state, {world_path, world}).
 
 %% External API
--export([start_link/1, get_chunk/3, get_spawn/0, load_chunk/4]).
+-export([start_link/1, get_chunk/3, get_spawn/0, load_chunk/4, dbg_chunk/3]).
 
 generate_pre_chunk(X,Z, Update) ->
     mc_util:write_packet(16#32, [{int, X}, {int, Z}, {bool, Update}]).
@@ -36,11 +36,12 @@ load_chunk(X,Y,Z, Root) ->
     {tag_compound, <<"Level">>, LevelData} = Data,
     {tag_byte_array, <<"Blocks">>, Blocks} = lists:keyfind(<<"Blocks">>, 2, LevelData),
     {tag_byte_array, <<"BlockLight">>, BlockLight} = lists:keyfind(<<"BlockLight">>, 2, LevelData),
+    {tag_byte_array, <<"SkyLight">>, SkyLight} = lists:keyfind(<<"SkyLight">>, 2, LevelData),
     {tag_byte_array, <<"Data">>, MetaData} = lists:keyfind(<<"Data">>, 2, LevelData),
     SizeX = 16, SizeY = 128, SizeZ = 16,
-    MetaInfo = mc_util:expand_4_to_8(MetaData),
-    dbg_chunk(Blocks, MetaInfo, BlockLight),
-    Compressed = zlib:compress(<<Blocks/binary, MetaInfo/binary, BlockLight/binary>>),
+    %MetaInfo = mc_util:expand_4_to_8(MetaData),
+    WorldLight = mc_util:or_binaries(BlockLight, SkyLight),
+    Compressed = zlib:compress(<<Blocks/binary, MetaData/binary, MetaData/binary, WorldLight/binary>>),
     mc_util:write_packet(16#33, lists:flatten([{int, X*16}, {short, Y}, {int, Z*16}, {byte, SizeX-1}, {byte, SizeY-1}, {byte, SizeZ-1}, {int, size(Compressed)}, {binary, Compressed}])).
 
 dbg_chunk(<<>>, <<>>, <<>>) ->
