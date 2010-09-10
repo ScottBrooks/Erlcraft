@@ -191,6 +191,17 @@ handle_packet(Client, {kick, Message}) ->
     gen_server:cast(Client, {kick, Message}),
     none;
 
+handle_packet(_Client, {arm_animation, _EntityID, _Unknown}) ->
+    none;
+
+handle_packet(Client, {block_dig, Stage, X, Y, Z, Direction}) ->
+    case mc_world:block_dig(Stage, X, Y, Z, Direction, Client) of
+        {block_change, X, Y, Z, Type, Meta} ->
+            mc_reply:block_change(X, Y, Z, Type, Meta);
+        _ ->
+            none
+    end;
+
 handle_packet(_State, Unknown) ->
     io:format("Unknown Packet: ~p~n", [Unknown]),
     <<"">>.

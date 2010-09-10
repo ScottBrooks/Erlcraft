@@ -31,8 +31,12 @@ entity_add_mob(EntityID, Type, X, Y, Z, R, P) ->
 chat(Message) ->
     mc_util:write_packet(16#03, [{string, Message}]).
 
+block_change(X, Y, Z, Type, Meta) ->
+    mc_util:write_packet(16#35, [{int, X}, {byte,Y}, {int, Z}, {byte, Type}, {byte, Meta}]).
 
-fake_world(Pid, BlockCount, LocX, LocY, LocZ) ->
+
+
+fake_world(Pid, BlockCount, LocX, _LocY, LocZ) ->
     Width = math:sqrt(BlockCount),
     erlcraft_client_fsm:send_packet(Pid, mc_reply:chat("Hello world")),
     lists:map(
