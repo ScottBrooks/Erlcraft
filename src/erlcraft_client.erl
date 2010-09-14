@@ -29,24 +29,27 @@ update_chunks(ChunkX, ChunkY, ChunkZ, FSMPid, ChunkList) ->
             erlcraft_client_fsm:send_packet(FSMPid, Chunk),
             sets:add_element(Key, Acc)
         end, ChunkList, ChunksToLoad).
+send_world(FSMPid, ChunkList) ->
+    io:format("Sending world~n", []),
+    {loc, SpawnX, SpawnY, SpawnZ, _SpawnStance, _SpawnRotation, _SpawnPitch} = mc_world:get_spawn(),
+    update_chunks(SpawnX, SpawnY, SpawnZ, FSMPid, ChunkList).
 
 init([FSMPid]) ->
     io:format("Started!~n", []),
     {ok, TRef} = timer:send_interval(1000, update_time),
-    ChunkList = sets:new(),
-    {ok, #state{fsm = FSMPid, timer_ref = TRef, client_start = now(), loc = undefined, chunk_list = ChunkList, player_id = undefined}}.
+    {ok, #state{fsm = FSMPid, timer_ref = TRef, client_start = now(), loc = undefined, chunk_list = sets:new(), player_id = undefined}}.
 
 handle_call(_Request, _From, _State) ->
     io:format("Call: ~p~n", [_Request]),
     {reply, none, _State}.
 
+
 handle_cast({move_look, X,Y,Z, S, R, P}, #state{fsm = FSMPid, loc = Location, chunk_list = ChunkList} = State) ->
     {loc, NewX, NewY, NewZ, NewStance, NewRotation, NewPitch, NewList} = case Location of
         undefined ->
             {loc, SpawnX, SpawnY, SpawnZ, SpawnStance, SpawnRotation, SpawnPitch} = mc_world:get_spawn(),
-            NewChunkList = update_chunks(SpawnX, SpawnY, SpawnZ, FSMPid, ChunkList),
             erlcraft_client_fsm:send_packet(FSMPid, mc_reply:position_and_look(SpawnX, SpawnY, SpawnZ, SpawnStance, SpawnRotation, SpawnPitch)),
-            {loc, SpawnX, SpawnY, SpawnZ, SpawnStance, SpawnRotation, SpawnPitch, NewChunkList};
+            {loc, SpawnX, SpawnY, SpawnZ, SpawnStance, SpawnRotation, SpawnPitch, ChunkList};
         _ ->
             NewChunkList = update_chunks(X, Y, Z, FSMPid, ChunkList),
             {loc, X, Y, Z, S, R, P, NewChunkList}
@@ -59,8 +62,9 @@ handle_cast({position, X, Y, Z, S, _U}, #state{loc = {_, _, _, _, R, P}, fsm = F
 handle_cast({look, R, P, _U}, #state{loc = {X, Y, Z, S, _, _}} = State) ->
     {noreply, State#state{loc = {X, Y, Z, S, R, P}}};
 
-handle_cast({player_id, PlayerID}, State) ->
-    {noreply, State#state{player_id = PlayerID}};
+handle_cast({player_id, PlayerID}, #state{fsm = FSMPid, chunk_list = ChunkList} = State) ->
+    NewChunkList = send_world(FSMPid, ChunkList),
+    {noreply, State#state{player_id = PlayerID, chunk_list = NewChunkList}};
 
 handle_cast({flying, _Flying}, State) ->
     {noreply, State};
