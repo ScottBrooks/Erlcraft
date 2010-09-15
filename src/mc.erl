@@ -24,6 +24,9 @@
 -define(PKT_HANDSHAKE(PlayerName),               <<16#02, ?PKT_STRING(PlayerName), Rest/binary>>).
 -define(PKT_CHAT(Message),                       <<16#03, ?PKT_STRING(Message), Rest/binary>>).
 -define(PKT_UPDATE_TIME(Time),                   <<16#04, ?PKT_LONG(Time), Rest/binary>>).
+%%% Damn you notch, just had to make this one a pain to parse
+-define(PKT_PLAYER_INVENTORY(T, C),              <<16#05, ?PKT_INTEGER(T), ?PKT_SHORT(C), More/binary>>).
+-define(PKT_COMPASS(X,Y,Z),                      <<16#06, ?PKT_INTEGER(X), ?PKT_INTEGER(Y), ?PKT_INTEGER(Z), Rest/binary>>).
 -define(PKT_FLYING(Flying),                      <<16#0A, ?PKT_BOOL(Flying), Rest/binary>>).
 -define(PKT_PLAYER_POSITION(X,Y,Z,S,U),          <<16#0B, ?PKT_DOUBLE(X), ?PKT_DOUBLE(Y), ?PKT_DOUBLE(S), ?PKT_DOUBLE(Z), ?PKT_BOOL(U), Rest/binary>>).
 -define(PKT_PLAYER_LOOK(R,P,U),                  <<16#0C, ?PKT_FLOAT(R), ?PKT_FLOAT(P), ?PKT_BOOL(U), Rest/binary>>).
@@ -37,7 +40,7 @@
 -define(PKT_PICKUP_SPAWN(ID,I,U1,X,Y,Z,R,P,U2),  <<16#15, ?PKT_INTEGER(ID), ?PKT_SHORT(I), ?PKT_BYTE(U1), ?PKT_INTEGER(X), ?PKT_INTEGER(Y), ?PKT_INTEGER(Z), ?PKT_BYTE(R), ?PKT_BYTE(P), ?PKT_BYTE(U2), Rest/binary>>).
 -define(PKT_COLLECT_ITEM(Collected, Collector),  <<16#16, ?PKT_INTEGER(Collected), ?PKT_INTEGER(Collector), Rest/binary>>).
 
--define(PKT_UNKNOWN(A,B,C,D,E),                  <<16#17, ?PKT_INTEGER(A), ?PKT_BYTE(B), ?PKT_INTEGER(C), ?PKT_INTEGER(D), ?PKT_INTEGER(E), Rest/binary>>).
+-define(PKT_ADD_OBJECT(ID,T,X,Y,Z),              <<16#17, ?PKT_INTEGER(ID), ?PKT_BYTE(T), ?PKT_INTEGER(X), ?PKT_INTEGER(Y), ?PKT_INTEGER(Z), Rest/binary>>).
 -define(PKT_MOB_SPAWN(ID,T,X,Y,Z,R,P),           <<16#18, ?PKT_INTEGER(ID), ?PKT_BYTE(T), ?PKT_INTEGER(X), ?PKT_INTEGER(Y), ?PKT_INTEGER(Z), ?PKT_BYTE(R), ?PKT_BYTE(P), Rest/binary>>).
 -define(PKT_DESTROY_ENTITY(ID),                  <<16#1D, ?PKT_INTEGER(ID), Rest/binary>>).
 -define(PKT_ENTITY(ID),                          <<16#1E, ?PKT_INTEGER(ID), Rest/binary>>).
@@ -49,6 +52,7 @@
 -define(PKT_MAP_CHUNK(X,Y,Z,SX,SY,SZ,CC),        <<16#33, ?PKT_INTEGER(X), ?PKT_SHORT(Y), ?PKT_INTEGER(Z), ?PKT_BYTE(SX), ?PKT_BYTE(SY), ?PKT_BYTE(SZ), ?PKT_BINARY(CC), Rest/binary>>).
 -define(PKT_MULTI_BLOCK_CHANGE(X,Z,CA,TA,MA),    <<16#34, ?PKT_INTEGER(X), ?PKT_INTEGER(Z), _AS:16/integer-signed-big, CA:_AS/binary, TA:_AS/binary, MA:_AS/binary, Rest/binary>>).
 -define(PKT_BLOCK_CHANGE(X,Y,Z,T,M),             <<16#35, ?PKT_INTEGER(X), ?PKT_BYTE(Y), ?PKT_INTEGER(Z), ?PKT_BYTE(T), ?PKT_BYTE(M), Rest/binary>>).
+-define(PKT_COMPLEX_ENTITY(X,Y,Z,Payload),       <<16#3B, ?PKT_INTEGER(X), ?PKT_SHORT(Y), ?PKT_INTEGER(Z), _PS:16/integer-signed-big, Payload:_PS/binary, Rest/binary>>).
 -define(PKT_KICK(Message),                       <<16#FF, ?PKT_STRING(Message), Rest/binary>>).
 
 
@@ -68,6 +72,13 @@ handle_data(Data) ->
         % 0x04 - Time
         ?PKT_UPDATE_TIME(Time) ->
             {done, {update, Time}, Rest};
+        % 0x05 - Inventory
+        ?PKT_PLAYER_INVENTORY(Type, Count) ->
+            {Data, Rest} = parse_inventory(Count, More),
+            {done, {inventory, Type, Data}, Rest};
+        % 0x06 - Spawn(Compass location)
+        ?PKT_COMPASS(X, Y, Z) ->
+            {done, {compass, X, Y, Z}, Rest};
         % 0x0A - Flying
         ?PKT_FLYING(Flying) ->
             {done, {flying, Flying}, Rest};
@@ -104,9 +115,9 @@ handle_data(Data) ->
         % 0x16 - Collect Item
         ?PKT_COLLECT_ITEM(Collected, Collector) ->
             {done, {collect, Collected, Collector}, Rest};
-        % 0x17 - Unknown
-        ?PKT_UNKNOWN(A, B, C, D, E) ->
-            {done, {unknown, A, B, C, D, E}, Rest};
+        % 0x17 - Add object/vehicle
+        ?PKT_ADD_OBJECT(ID, Type, X, Y, Z) ->
+            {done, {add_object, ID, Type, X, Y, Z}, Rest};
         % 0x18 - Mob Spawn
         ?PKT_MOB_SPAWN(ID, Type, X, Y, Z, R, P) ->
             {done, {mob_spawn, ID, Type, X, Y, Z, R, P}, Rest};
@@ -140,6 +151,9 @@ handle_data(Data) ->
         % 0x35 - Block Change
         ?PKT_BLOCK_CHANGE(X, Y, Z, Type, Meta) ->
             {done, {block_change, X, Y, Z, Type, Meta}, Rest};
+        % 0x3B - Complex Entity
+        ?PKT_COMPLEX_ENTITY(X, Y, Z, Payload) ->
+            {done, {complex_entity, X, Y, Z, Payload}, Rest};
         % 0xFF - Kick
         ?PKT_KICK(Message) ->
             {done, {kick, Message}, Rest};
@@ -148,13 +162,26 @@ handle_data(Data) ->
             {more, Data}
     end.
 
+
+parse_inventory(Count, Data) ->
+    parse_inventory(Count, Data, []).
+
+parse_inventory(Count, Data, Items) ->
+    case Data of
+        <<-1/integer-signed-big, MoreData/binary>> ->
+            parse_inventory(Count-1, MoreData, [{empty}|Items]);
+        <<?PKT_SHORT(ItemID), ?PKT_BYTE(Count), ?PKT_SHORT(Health), MoreData/binary>> ->
+            parse_inventory(Count-1, MoreData, [{item, ItemID, Count, Health}|Items])
+    end.
+
+
 handle_packet(_Client, {handshake, _PlayerName}) ->
 %    io:format("C->S: Welcome: ~p~n", [PlayerName]),
     mc_reply:handshake(false);
 
 handle_packet(Client, {login, PlayerID, _Username, _Password}) ->
 %    io:format("C->S: PlayerID: ~p~nLogin: ~p~nPass: ~p~n", [PlayerID, Username, Password]),
-    gen_server:cast(Client, {player_id, PlayerID}),
+    gen_server:cast(Client, {client_begin, PlayerID}),
     mc_reply:login(PlayerID, "", "");
 
 handle_packet(Client, {player_move_look, X, Y, Z, S, R, P, _U}) ->

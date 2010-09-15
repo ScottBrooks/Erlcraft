@@ -4,10 +4,10 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--record(state, {world_path, world, chunk_store}).
+-record(state, {world_path, world, chunk_store, clients, world_updates}).
 
 %% External API
--export([start_link/1, get_chunk/3, get_spawn/0, load_chunk/5, dbg_chunk/3, block_dig/6]).
+-export([start_link/1, get_chunk/3, get_spawn/0, load_chunk/5, dbg_chunk/3, block_dig/6, register_client/1]).
 
 generate_pre_chunk(X,Z, Update) ->
     mc_util:write_packet(16#32, [{int, X}, {int, Z}, {bool, Update}]).
@@ -45,7 +45,7 @@ block_dig(State, X, Y, Z, Direction, _Client, ChunkStore) when State =:= 3 ->
             <<Before:Offset/binary, Block:8/integer, After/binary>> = BD,
             NBD = <<Before/binary, 0:8/integer, After/binary>>,
             ets:insert(ChunkStore, {Key, NBD, MD, WL}),
-            {block_change, X, Y, Z, 0, 8};
+            {block, X, Y, Z, 0, 8};
         Else ->
             io:format("unknown: ~p key: ~p~n", [Else, Key]),
             ok
@@ -138,6 +138,9 @@ get_spawn() ->
 get_chunk(X,Y,Z) ->
     gen_server:call(?MODULE, {get_chunk, trunc(X), trunc(Y), trunc(Z)}).
 
+register_client(Client) ->
+    gen_server:call(?MODULE, {register_client, Client}).
+
 start_link(World) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [World], []).
 
@@ -151,7 +154,13 @@ init([MapName]) ->
     LevelPath = string:join([Path, "level.dat"], "/"),
     World = nbt:load_file(LevelPath),
     ChunkStore = ets:new(world, []),
-    {ok, #state{world_path = Path, world = World, chunk_store = ChunkStore}}.
+    {ok, _TRef} = timer:send_interval(500, flush_world_updates),
+    {ok, #state{world_path = Path, world = World, chunk_store = ChunkStore, clients = [], world_updates = []}}.
+
+handle_call({register_client, Client}, _From, #state{clients = Clients} = State) when is_pid(Client) ->
+    NewClients = lists:keystore(Client, 2, Clients, {client, Client}),
+    io:format("Registering client: ~p~n", [Client]),
+    {reply, ok, State#state{clients = NewClients}};
 
 handle_call({get_chunk, X, Y, Z}, _From, #state{world_path = WorldPath, chunk_store = ChunkStore} = State) when is_integer(X), is_integer(Z) ->
     io:format("Chunk Request: [~p, ~p, ~p]~n", [X, Y, Z]),
@@ -184,9 +193,12 @@ handle_call({get_spawn}, _From, #state{world = World} = State) ->
     io:format("Spawning player at: [~p, ~p, ~p]~n", [SpawnX, SpawnY, SpawnZ]),
     {reply, {loc, SX, SY, SZ, SY - 1.5, 0.0, 0.0}, State};
 
-handle_call({block_dig, Stage, X, Y, Z, Direction, Client}, _From, #state{chunk_store = ChunkStore} = _State) ->
-    BlockChange = block_dig(Stage, X, Y, Z, Direction, Client, ChunkStore),
-    {reply, BlockChange, _State};
+handle_call({block_dig, Stage, X, Y, Z, Direction, Client}, _From, #state{chunk_store = ChunkStore, world_updates = WorldUpdates} = State) ->
+    NewUpdates = case block_dig(Stage, X, Y, Z, Direction, Client, ChunkStore) of
+        ok -> WorldUpdates;
+        Update -> [Update | WorldUpdates]
+    end,
+    {reply, none, State#state{world_updates = NewUpdates}};
 
 handle_call(_Request, _From, _State) ->
     io:format("Call: ~p~n", [_Request]),
@@ -195,6 +207,17 @@ handle_call(_Request, _From, _State) ->
 handle_cast(_Request, _State) ->
     io:format("Cast: ~p~n", [_Request]),
     {noreply, _State}.
+
+handle_info(flush_world_updates, #state{clients = Clients, world_updates = WorldUpdates} = State) ->
+    lists:foreach(fun(Block) ->
+            {block, X, Y, Z, Type, Meta} = Block,
+            lists:foreach(fun(Client) ->
+                    Packet = mc_reply:block_change(trunc(X), trunc(Y), trunc(Z), Type, Meta),
+                    {client, ClientPid} = Client,
+                    gen_server:cast(ClientPid, {packet, Packet})
+                end, Clients)
+        end, WorldUpdates),
+    {noreply, State#state{world_updates = []}};
 
 handle_info(_Info, _State) ->
     io:format("Info: ~p~n", [_Info]),

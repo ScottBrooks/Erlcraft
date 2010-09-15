@@ -34,6 +34,8 @@ chat(Message) ->
 block_change(X, Y, Z, Type, Meta) ->
     mc_util:write_packet(16#35, [{int, X}, {byte,Y}, {int, Z}, {byte, Type}, {byte, Meta}]).
 
+compass(X, Y, Z) ->
+    mc_util:write_packet(16#06, [{int, trunc(X)}, {int, trunc(Y)}, {int, trunc(Z)}]).
 
 
 fake_world(Pid, BlockCount, LocX, _LocY, LocZ) ->
