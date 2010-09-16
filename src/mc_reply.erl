@@ -37,6 +37,17 @@ block_change(X, Y, Z, Type, Meta) ->
 compass(X, Y, Z) ->
     mc_util:write_packet(16#06, [{int, trunc(X)}, {int, trunc(Y)}, {int, trunc(Z)}]).
 
+named_spawn(ID, Name, X, Y, Z, Rotation, Pitch, Item) ->
+    mc_util:write_packet(16#14, [{int, ID}, {string, Name}, {int, trunc(X)}, {int, trunc(Y)}, {int, trunc(Z)}, {byte, trunc(Rotation)}, {byte, trunc(Pitch)}, {short, Item}]).
+
+item_spawn(ID, Item, U1, X, Y, Z, R, P, U2) ->
+    mc_util:write_packet(16#15, [{int, ID}, {short, Item}, {byte, U1}, {int, X}, {int, Y}, {int, Z}, {byte, R}, {byte, P}, {byte, U2}]).
+
+collect_item(CollectedID, CollectorID) ->
+    mc_util:write_packet(16#16, [{int, CollectedID}, {int, CollectorID}]).
+add_to_inventory(ItemID, Amount, Health) ->
+    mc_util:write_packet(16#11, [{short, ItemID}, {byte, Amount}, {short, Health}]).
+
 
 fake_world(Pid, BlockCount, LocX, _LocY, LocZ) ->
     Width = math:sqrt(BlockCount),

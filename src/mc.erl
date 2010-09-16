@@ -74,8 +74,8 @@ handle_data(Data) ->
             {done, {update, Time}, Rest};
         % 0x05 - Inventory
         ?PKT_PLAYER_INVENTORY(Type, Count) ->
-            {Data, Rest} = parse_inventory(Count, More),
-            {done, {inventory, Type, Data}, Rest};
+            {Inventory, Rest} = parse_inventory(Count, More),
+            {done, {inventory, Type, Inventory}, Rest};
         % 0x06 - Spawn(Compass location)
         ?PKT_COMPASS(X, Y, Z) ->
             {done, {compass, X, Y, Z}, Rest};
@@ -166,12 +166,15 @@ handle_data(Data) ->
 parse_inventory(Count, Data) ->
     parse_inventory(Count, Data, []).
 
+parse_inventory(0, Data, Items) ->
+    {Items, Data};
+
 parse_inventory(Count, Data, Items) ->
     case Data of
-        <<-1/integer-signed-big, MoreData/binary>> ->
+        <<Val:16/integer-signed-big, MoreData/binary>> when Val =:= -1 ->
             parse_inventory(Count-1, MoreData, [{empty}|Items]);
-        <<?PKT_SHORT(ItemID), ?PKT_BYTE(Count), ?PKT_SHORT(Health), MoreData/binary>> ->
-            parse_inventory(Count-1, MoreData, [{item, ItemID, Count, Health}|Items])
+        <<?PKT_SHORT(ItemID), ?PKT_BYTE(ItemCount), ?PKT_SHORT(Health), MoreData/binary>> ->
+            parse_inventory(Count-1, MoreData, [{item, ItemID, ItemCount, Health}|Items])
     end.
 
 
@@ -179,9 +182,9 @@ handle_packet(_Client, {handshake, _PlayerName}) ->
 %    io:format("C->S: Welcome: ~p~n", [PlayerName]),
     mc_reply:handshake(false);
 
-handle_packet(Client, {login, PlayerID, _Username, _Password}) ->
+handle_packet(Client, {login, PlayerID, Username, _Password}) ->
 %    io:format("C->S: PlayerID: ~p~nLogin: ~p~nPass: ~p~n", [PlayerID, Username, Password]),
-    gen_server:cast(Client, {client_begin, PlayerID}),
+    gen_server:cast(Client, {client_begin, PlayerID, Username}),
     mc_reply:login(PlayerID, "", "");
 
 handle_packet(Client, {player_move_look, X, Y, Z, S, R, P, _U}) ->

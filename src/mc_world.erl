@@ -4,10 +4,11 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--record(state, {world_path, world, chunk_store, clients, world_updates}).
+-record(state, {world_path, world, chunk_store, block_store, clients, world_updates}).
+-define(SERVER_TIMEOUT, 30000).
 
 %% External API
--export([start_link/1, get_chunk/3, get_spawn/0, load_chunk/5, dbg_chunk/3, block_dig/6, register_client/1]).
+-export([start_link/1, get_chunk/3, get_spawn/0, load_chunk/5, dbg_chunk/3, block_dig/6, register_client/2]).
 
 generate_pre_chunk(X,Z, Update) ->
     mc_util:write_packet(16#32, [{int, X}, {int, Z}, {bool, Update}]).
@@ -45,7 +46,10 @@ block_dig(State, X, Y, Z, Direction, _Client, ChunkStore) when State =:= 3 ->
             <<Before:Offset/binary, Block:8/integer, After/binary>> = BD,
             NBD = <<Before/binary, 0:8/integer, After/binary>>,
             ets:insert(ChunkStore, {Key, NBD, MD, WL}),
-            {block, X, Y, Z, 0, 8};
+            % Random location inside the block that was broken
+            RX = X * 32 + 8 + random:uniform() * 16,
+            RZ = Z * 32 + 8 + random:uniform() * 16,
+            [{block, X, Y, Z, 0, 8}, {spawn, random:uniform(8192), Block, 1, RX, (Y+1) * 32, RZ, 0, 0, 0}];
         Else ->
             io:format("unknown: ~p key: ~p~n", [Else, Key]),
             ok
@@ -130,16 +134,16 @@ dbg_chunk(Blocks, MetaData, LightData) ->
     dbg_chunk(RestBlocks, RestMeta, RestLight).
 
 block_dig(Stage, X, Y, Z, Direction, Client) ->
-    gen_server:call(?MODULE, {block_dig, Stage, X, Y, Z, Direction, Client}).
+    gen_server:call(?MODULE, {block_dig, Stage, X, Y, Z, Direction, Client}, ?SERVER_TIMEOUT).
 
 get_spawn() ->
-    gen_server:call(?MODULE, {get_spawn}).
+    gen_server:call(?MODULE, {get_spawn}, ?SERVER_TIMEOUT).
 
 get_chunk(X,Y,Z) ->
-    gen_server:call(?MODULE, {get_chunk, trunc(X), trunc(Y), trunc(Z)}).
+    gen_server:call(?MODULE, {get_chunk, trunc(X), trunc(Y), trunc(Z)}, ?SERVER_TIMEOUT).
 
-register_client(Client) ->
-    gen_server:call(?MODULE, {register_client, Client}).
+register_client(Client, Details) ->
+    gen_server:call(?MODULE, {register_client, Client, Details}, ?SERVER_TIMEOUT).
 
 start_link(World) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [World], []).
@@ -154,10 +158,17 @@ init([MapName]) ->
     LevelPath = string:join([Path, "level.dat"], "/"),
     World = nbt:load_file(LevelPath),
     ChunkStore = ets:new(world, []),
-    {ok, _TRef} = timer:send_interval(500, flush_world_updates),
-    {ok, #state{world_path = Path, world = World, chunk_store = ChunkStore, clients = [], world_updates = []}}.
+    BlockStore = ets:new(blocks, []),
+    timer:send_after(500, flush_world_updates),
+    {ok, #state{world_path = Path, world = World, chunk_store = ChunkStore, clients = [], world_updates = [], block_store = BlockStore}}.
 
-handle_call({register_client, Client}, _From, #state{clients = Clients} = State) when is_pid(Client) ->
+handle_call({register_client, Client, Details}, _From, #state{clients = Clients} = State) when is_pid(Client) ->
+    lists:foreach(fun(C) ->
+            {client, ClientPid} = C,
+            {client_details, ID, Name, X, Y, Z, R, P, I} = Details,
+            io:format("Sending named spawn[~p]: ~p to ~p~n", [ID, Name, ClientPid]),
+            gen_server:cast(ClientPid, {packet, mc_reply:named_spawn(ID, Name, X ,Y, Z, R, P, I)})
+        end, Clients),
     NewClients = lists:keystore(Client, 2, Clients, {client, Client}),
     io:format("Registering client: ~p~n", [Client]),
     {reply, ok, State#state{clients = NewClients}};
@@ -195,8 +206,9 @@ handle_call({get_spawn}, _From, #state{world = World} = State) ->
 
 handle_call({block_dig, Stage, X, Y, Z, Direction, Client}, _From, #state{chunk_store = ChunkStore, world_updates = WorldUpdates} = State) ->
     NewUpdates = case block_dig(Stage, X, Y, Z, Direction, Client, ChunkStore) of
-        ok -> WorldUpdates;
-        Update -> [Update | WorldUpdates]
+        ok ->
+            WorldUpdates;
+        Update -> lists:flatten([Update | WorldUpdates])
     end,
     {reply, none, State#state{world_updates = NewUpdates}};
 
@@ -208,15 +220,42 @@ handle_cast(_Request, _State) ->
     io:format("Cast: ~p~n", [_Request]),
     {noreply, _State}.
 
-handle_info(flush_world_updates, #state{clients = Clients, world_updates = WorldUpdates} = State) ->
-    lists:foreach(fun(Block) ->
-            {block, X, Y, Z, Type, Meta} = Block,
+handle_info(flush_world_updates, #state{clients = Clients, world_updates = WorldUpdates, block_store = BlockStore} = State) ->
+    lists:foreach(fun(Item) ->
+            Packet = case Item of 
+                {block, X, Y, Z, Type, Meta} ->
+                    mc_reply:block_change(trunc(X), trunc(Y), trunc(Z), Type, Meta);
+                {spawn, ID, ItemID, U1, X, Y, Z, R, P, U2} ->
+                    Key = {trunc(X/32), trunc(Z/32)},
+                    io:format("Spawn block at: ~p~n", [Key]),
+                    case ets:lookup(BlockStore, Key) of
+                        [] ->
+                            ets:insert(BlockStore, {Key, [{ID, ItemID}]});
+                        {Key, Values} ->
+                            ets:insert(BlockStore, {Key, [{ID, ItemID}|Values]})
+                    end,
+                    mc_reply:item_spawn(ID, ItemID, U1, trunc(X), trunc(Y), trunc(Z), R, P, U2)
+            end,
             lists:foreach(fun(Client) ->
-                    Packet = mc_reply:block_change(trunc(X), trunc(Y), trunc(Z), Type, Meta),
                     {client, ClientPid} = Client,
                     gen_server:cast(ClientPid, {packet, Packet})
                 end, Clients)
         end, WorldUpdates),
+    BlocksSent = lists:foldl(fun(Client, Acc) ->
+            {client, ClientPid} = Client,
+            {loc, X, _Y, Z} = gen_server:call(ClientPid, {get_location}, infinity),
+            Key = {trunc(X), trunc(Z)},
+            io:format("Key: ~p~n", [Key]),
+            case ets:lookup(BlockStore, Key) of
+                [{Key, Values}] ->
+                    io:format("Found block for client~n", []),
+                    [gen_server:cast(ClientPid, {give_item, ID, ItemID}) || {ID, ItemID} <- Values],
+                    [Key | Acc];
+                _ -> Acc
+            end
+        end, [], Clients),
+    [ets:delete(BlockStore, Key) || Key <- BlocksSent],
+    timer:send_after(500, flush_world_updates),
     {noreply, State#state{world_updates = []}};
 
 handle_info(_Info, _State) ->
